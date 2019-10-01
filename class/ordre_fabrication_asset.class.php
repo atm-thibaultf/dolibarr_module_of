@@ -1704,8 +1704,7 @@ class TAssetOF extends TObjetStd{
 
 		$sql = "SELECT rowid";
 		$sql.= " FROM ".MAIN_DB_PREFIX."assetOf of";
-		$sql.= " INNER JOIN ".MAIN_DB_PREFIX."element_element ee ON (of.rowid = ee.fk_source AND ee.sourcetype = 'ordre_fabrication' AND ee.targettype = 'order_supplier')";
-		$sql.= " WHERE ee.fk_target = ".$id_command;
+		$sql.= " WHERE fk_commande = ".$id_command;
 		$resql = $db->query($sql);
 
 		while($res = $db->fetch_object($resql)) {
@@ -1953,7 +1952,6 @@ class TAssetOFLine extends TObjetStd{
 					if($mouvement == 'destockage')  {
 						if(empty($conf->global->ASSET_NEGATIVE_DESTOCK) && $asset->contenancereel_value - $qty_to_stock_rest<0) {
 							$qty_asset_to_stock=$asset->contenancereel_value;
-							
 							if($i+1 == $nb_asset) {
 								setEventMessage($langs->trans('InssuficienteAssetContenanceToUsedInOF', $asset->serial_number),'errors');
 							}
@@ -1962,7 +1960,8 @@ class TAssetOFLine extends TObjetStd{
 							$qty_asset_to_stock = $qty_to_stock_rest;
 						}
 						else {
-							$qty_asset_to_stock = $qty_to_stock_rest;
+							if($nb_asset-$i > 0) $qty_asset_to_stock = $qty_to_stock_rest/($nb_asset-$i);
+							else $qty_asset_to_stock = $qty_to_stock_rest;
 						}
 					}
 					else {
@@ -2326,13 +2325,15 @@ class TAssetOFLine extends TObjetStd{
                 $TAsset->fk_societe_localisation = $conf->global->ASSET_DEFAULT_LOCATION;
                 $TAsset->fk_product = $fk_product;
 
-                if(!empty($conf->global->ASSET_DEFAULT_DLUO)) $TAsset->dluo = strtotime(date('Y-m-d').' +'.$conf->global->ASSET_DEFAULT_DLUO.' days');
-                else $TAsset->dluo = strtotime(date('Y-m-d'));
+		$TAsset->fk_asset_type = $assetType->getId();
+                $TAsset->load_asset_type($PDOdb);
+
+		if (empty($TAsset->dluo)){
+                	if(!empty($conf->global->ASSET_DEFAULT_DLUO)) $TAsset->dluo = strtotime(date('Y-m-d').' +'.$conf->global->ASSET_DEFAULT_DLUO.' days');
+                	else $TAsset->dluo = strtotime(date('Y-m-d'));
+		}
 
 				//pre($assetType,true);exit;
-
-                $TAsset->fk_asset_type = $assetType->getId();
-                $TAsset->load_asset_type($PDOdb);
 
                 if($qty_to_make_rest>$TAsset->contenance_value) {
                     $qty_to_make_asset = $TAsset->contenance_value;
@@ -2757,6 +2758,7 @@ class TAssetWorkstationOF extends TObjetStd{
 		$projectTask->fk_project = $OF->fk_project;
 		$projectTask->ref = $modTask->getNextValue(0, $projectTask);
 		$projectTask->label = $ws->libelle;
+		$projectTask->description = $this->note_private;
 
         if(!empty($conf->global->ASSET_TASK_HIERARCHIQUE_BY_RANK)) {
 
@@ -2815,7 +2817,7 @@ class TAssetWorkstationOF extends TObjetStd{
 
 		$res = $projectTask->create($user);
         if($res<0) {
-            var_dump($projectTask);
+            var_dump($projectTask->error, $projectTask);
 
             exit('ErrorCreateTaskWS') ;
         }
@@ -2835,6 +2837,7 @@ class TAssetWorkstationOF extends TObjetStd{
 		$projectTask = new Task($db);
 		$projectTask->fetch($this->fk_project_task);
 		$projectTask->fk_project = $OF->fk_project;
+		$projectTask->description = $this->note_private;
 
 		if($projectTask->planned_workload<=0)  $projectTask->planned_workload = $this->nb_hour*3600;
 
